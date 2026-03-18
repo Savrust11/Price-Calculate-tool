@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ヤフオク スクレーパー</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            text-align: center;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: #f8f9ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f1ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: #e8e9ff;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            font-size: 1.2em;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .upload-subtext {
+            color: #999;
+            font-size: 0.9em;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-info {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .file-info.show {
+            display: block;
+        }
+
+        .file-name {
+            font-weight: bold;
+            color: #2e7d32;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 20px;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 7px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .stop-btn {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+            display: none;
+            margin-top: 10px;
+        }
+
+        .stop-btn.show {
+            display: block;
+        }
+
+        .stop-btn:hover {
+            box-shadow: 0 7px 20px rgba(255, 107, 107, 0.6);
+        }
+
+        .progress-container {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .progress-container.show {
+            display: block;
+        }
+
+        .progress-bar-wrapper {
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 30px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .progress-bar {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .status-box {
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .status-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .status-time {
+            color: #999;
+            font-size: 0.85em;
+            margin-right: 10px;
+        }
+
+        .status-message {
+            color: #333;
+        }
+
+        .status-url {
+            color: #667eea;
+            font-size: 0.9em;
+            margin-top: 5px;
+            word-break: break-all;
+            font-family: monospace;
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            display: none;
+            margin-top: 20px;
+        }
+
+        .download-btn.show {
+            display: block;
+        }
+
+        .folder-btn {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            margin-top: 10px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        .settings-section {
+            background: #f8f9ff;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 25px 0;
+            border: 2px solid #e0e5ff;
+        }
+
+        .settings-title {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+            text-align: center;
+        }
+
+        .settings-grid {
+            display: grid;
+            gap: 20px;
+        }
+
+        .setting-group {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .setting-group label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .setting-label {
+            color: #333;
+            font-weight: 500;
+            font-size: 0.95em;
+        }
+
+        .setting-value {
+            color: #667eea;
+            font-weight: bold;
+            font-size: 1.1em;
+            min-width: 60px;
+            text-align: right;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 5px;
+            background: #e0e5ff;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(102, 126, 234, 0.5);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 5px rgba(102, 126, 234, 0.5);
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: #764ba2;
+        }
+
+        input[type="range"]::-moz-range-thumb:hover {
+            background: #764ba2;
+        }
+
+        .setting-hint {
+            font-size: 0.75em;
+            color: #999;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        .priority-section {
+            background: #fff8f0;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 25px 0;
+            border: 2px solid #ffe0b2;
+        }
+
+        .priority-title {
+            color: #e65100;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            text-align: center;
+        }
+
+        .priority-description {
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 20px;
+        }
+
+        .priority-add-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .priority-add-row input[type="text"],
+        .priority-add-row input[type="number"] {
+            flex: 1;
+            padding: 10px 15px;
+            border: 2px solid #ffe0b2;
+            border-radius: 8px;
+            font-size: 0.95em;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .priority-add-row input[type="text"]:focus,
+        .priority-add-row input[type="number"]:focus {
+            border-color: #e65100;
+        }
+
+        .priority-add-row input[type="text"] {
+            flex: 2;
+        }
+
+        .priority-add-btn {
+            background: linear-gradient(135deg, #ff8a00 0%, #e65100 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 0.95em;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.3s;
+        }
+
+        .priority-add-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(230, 81, 0, 0.4);
+        }
+
+        .priority-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .priority-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            animation: slideIn 0.3s ease;
+        }
+
+        .priority-item-info {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .priority-keyword {
+            font-weight: bold;
+            color: #e65100;
+        }
+
+        .priority-amount {
+            color: #2e7d32;
+            font-weight: bold;
+        }
+
+        .priority-remove-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+
+        .priority-remove-btn:hover {
+            background: #ee5a5a;
+        }
+
+        .priority-empty {
+            text-align: center;
+            color: #999;
+            font-style: italic;
+            padding: 15px;
+        }
+
+        .priority-bulk-row {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .priority-bulk-btn {
+            background: linear-gradient(135deg, #ffb347 0%, #ff8a00 100%);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 8px;
+            font-size: 0.95em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .priority-bulk-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(255, 138, 0, 0.4);
+        }
+
+        .priority-count {
+            text-align: center;
+            color: #e65100;
+            font-weight: bold;
+            margin-top: 10px;
+            font-size: 0.95em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 ヤフオク スクレーパー</h1>
+        <p class="subtitle">Excelファイルをアップロードしてオークションデータを取得</p>
+
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">クリックまたはExcelファイルをドラッグ＆ドロップ</div>
+            <div class="upload-subtext">対応形式: .xlsx, .xls（複数ファイル対応）</div>
+            <input type="file" id="fileInput" accept=".xlsx,.xls" multiple>
+        </div>
+
+        <div class="file-info" id="fileInfo">
+            <span>✓ ファイルアップロード済み: </span>
+            <span class="file-name" id="fileName"></span>
+        </div>
+
+        <!-- Settings Section -->
+        <div class="settings-section" id="settingsSection">
+            <h3 class="settings-title">⚙️ 計算設定 / Calculation Settings</h3>
+            
+            <div class="settings-grid">
+                <div class="setting-group">
+                    <label for="profitMargin">
+                        <span class="setting-label">利益率 / Profit Margin</span>
+                        <span class="setting-value" id="profitMarginValue">50%</span>
+                    </label>
+                    <input type="range" id="profitMargin" min="0" max="100" value="50" step="1">
+                </div>
+
+                <div class="setting-group">
+                    <label for="marketplaceFee">
+                        <span class="setting-label">手数料 / Marketplace Fee</span>
+                        <span class="setting-value" id="marketplaceFeeValue">10%</span>
+                    </label>
+                    <input type="range" id="marketplaceFee" min="0" max="30" value="10" step="0.5">
+                </div>
+
+                <div class="setting-group">
+                    <label for="consumptionTax">
+                        <span class="setting-label">消費税 / Consumption Tax</span>
+                        <span class="setting-value" id="consumptionTaxValue">10%</span>
+                    </label>
+                    <input type="range" id="consumptionTax" min="0" max="20" value="10" step="1">
+                </div>
+            </div>
+        </div>
+
+        <!-- Priority Bidding Section -->
+        <div class="priority-section" id="prioritySection">
+            <h3 class="priority-title">🏆 優先入札 / Priority Bidding</h3>
+            <p class="priority-description">
+                特定の型番やシリーズに対して個別の最大入札金額を設定できます。<br>
+                Set custom max bid amounts for specific camera models or series you must win.
+            </p>
+
+            <div class="priority-add-row">
+                <input type="text" id="priorityKeyword" placeholder="型番 / Model (例: Canon EOS R5)">
+                <input type="number" id="priorityAmount" placeholder="入札額 / Bid (¥)" min="1">
+                <button class="priority-add-btn" id="addPriorityBtn">＋ 追加</button>
+            </div>
+
+            <div class="priority-bulk-row">
+                <button class="priority-bulk-btn" id="bulkImportBtn">📂 一括インポート / Bulk Import (CSV/Excel)</button>
+                <input type="file" id="bulkFileInput" accept=".csv,.xlsx,.xls" style="display:none">
+                <div class="setting-hint" style="margin-top:8px;text-align:center">
+                    2列: 型番/シリーズ, 入札金額　—　Format: Column 1 = keyword, Column 2 = amount
+                </div>
+            </div>
+
+            <ul class="priority-list" id="priorityList">
+                <li class="priority-empty" id="priorityEmpty">優先入札が設定されていません / No priority bids set</li>
+            </ul>
+        </div>
+
+        <div class="error" id="errorBox"></div>
+
+        <button class="btn" id="startBtn" disabled>
+            スクレイピング開始
+        </button>
+
+        <button class="btn stop-btn" id="stopBtn">
+            ⏹ 停止
+        </button>
+
+        <button class="btn folder-btn" id="folderBtn">
+            📁 出力フォルダを開く
+        </button>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar-wrapper">
+                <div class="progress-bar" id="progressBar">0%</div>
+            </div>
+            <div class="status-box" id="statusBox"></div>
+        </div>
+
+        <a class="btn download-btn" id="downloadBtn" href="#" download>
+            📥 結果をダウンロード
+        </a>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const startBtn = document.getElementById('startBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const stopBtn = document.getElementById('stopBtn');
+        const progressBar = document.getElementById('progressBar');
+        const statusBox = document.getElementById('statusBox');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const errorBox = document.getElementById('errorBox');
+        const folderBtn = document.getElementById('folderBtn');
+
+        // Settings controls
+        const profitMargin = document.getElementById('profitMargin');
+        const profitMarginValue = document.getElementById('profitMarginValue');
+        const marketplaceFee = document.getElementById('marketplaceFee');
+        const marketplaceFeeValue = document.getElementById('marketplaceFeeValue');
+        const consumptionTax = document.getElementById('consumptionTax');
+        const consumptionTaxValue = document.getElementById('consumptionTaxValue');
+
+        // Priority bidding controls
+        const priorityKeyword = document.getElementById('priorityKeyword');
+        const priorityAmount = document.getElementById('priorityAmount');
+        const addPriorityBtn = document.getElementById('addPriorityBtn');
+        const priorityList = document.getElementById('priorityList');
+        const priorityEmpty = document.getElementById('priorityEmpty');
+        const bulkImportBtn = document.getElementById('bulkImportBtn');
+        const bulkFileInput = document.getElementById('bulkFileInput');
+
+        let uploadedFilePaths = [];
+        let queueId = null;
+        let priorityBids = [];
+
+        // Update setting values when sliders change
+        profitMargin.addEventListener('input', (e) => {
+            profitMarginValue.textContent = e.target.value + '%';
+        });
+
+        marketplaceFee.addEventListener('input', (e) => {
+            marketplaceFeeValue.textContent = e.target.value + '%';
+        });
+
+        consumptionTax.addEventListener('input', (e) => {
+            consumptionTaxValue.textContent = e.target.value + '%';
+        });
+
+        // Priority bidding - Add
+        addPriorityBtn.addEventListener('click', addPriorityBid);
+        priorityKeyword.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addPriorityBid();
+        });
+        priorityAmount.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addPriorityBid();
+        });
+
+        function addPriorityBid() {
+            const keyword = priorityKeyword.value.trim();
+            const amount = parseInt(priorityAmount.value);
+
+            if (!keyword) {
+                showError('型番/シリーズ名を入力してください');
+                return;
+            }
+            if (!amount || amount <= 0) {
+                showError('有効な入札金額を入力してください');
+                return;
+            }
+
+            // Check for duplicate
+            if (priorityBids.some(b => b.keyword.toLowerCase() === keyword.toLowerCase())) {
+                showError('この型番は既に追加されています');
+                return;
+            }
+
+            showError('');
+            priorityBids.push({ keyword, amount });
+            renderPriorityList();
+            priorityKeyword.value = '';
+            priorityAmount.value = '';
+            priorityKeyword.focus();
+        }
+
+        function removePriorityBid(index) {
+            priorityBids.splice(index, 1);
+            renderPriorityList();
+        }
+
+        function renderPriorityList() {
+            // Remove count display if exists
+            const existingCount = priorityList.parentElement.querySelector('.priority-count');
+            if (existingCount) existingCount.remove();
+
+            if (priorityBids.length === 0) {
+                priorityEmpty.style.display = 'block';
+                // Remove all items except the empty message
+                const items = priorityList.querySelectorAll('.priority-item');
+                items.forEach(item => item.remove());
+                return;
+            }
+
+            priorityEmpty.style.display = 'none';
+            // Remove existing items
+            const items = priorityList.querySelectorAll('.priority-item');
+            items.forEach(item => item.remove());
+
+            priorityBids.forEach((bid, index) => {
+                const li = document.createElement('li');
+                li.className = 'priority-item';
+                li.innerHTML = `
+                    <div class="priority-item-info">
+                        <span class="priority-keyword">${escapeHtml(bid.keyword)}</span>
+                        <span class="priority-amount">¥${bid.amount.toLocaleString()}</span>
+                    </div>
+                    <button class="priority-remove-btn" onclick="removePriorityBid(${index})">✕ 削除</button>
+                `;
+                priorityList.appendChild(li);
+            });
+
+            // Show count
+            const countDiv = document.createElement('div');
+            countDiv.className = 'priority-count';
+            countDiv.textContent = `登録数: ${priorityBids.length}件`;
+            priorityList.parentElement.appendChild(countDiv);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Bulk import for priority bids
+        bulkImportBtn.addEventListener('click', () => bulkFileInput.click());
+        bulkFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleBulkImport(e.target.files[0]);
+                bulkFileInput.value = '';
+            }
+        });
+
+        function handleBulkImport(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            showError('');
+
+            bulkImportBtn.disabled = true;
+            bulkImportBtn.textContent = '読み込み中...';
+
+            fetch('/upload_priority', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                bulkImportBtn.disabled = false;
+                bulkImportBtn.textContent = '📂 一括インポート / Bulk Import (CSV/Excel)';
+
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                // Merge imported bids (skip duplicates)
+                let added = 0;
+                for (const bid of data.priority_bids) {
+                    const exists = priorityBids.some(b => b.keyword.toLowerCase() === bid.keyword.toLowerCase());
+                    if (!exists) {
+                        priorityBids.push(bid);
+                        added++;
+                    }
+                }
+                renderPriorityList();
+                addStatusMessage(`✅ ${added}件の優先入札をインポートしました (${data.count}件中)`);
+            })
+            .catch(error => {
+                bulkImportBtn.disabled = false;
+                bulkImportBtn.textContent = '📂 一括インポート / Bulk Import (CSV/Excel)';
+                showError('ファイルの読み込みに失敗しました: ' + error.message);
+            });
+        }
+
+        // Upload area click
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileUpload(files);
+            }
+        });
+
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileUpload(e.target.files);
+            }
+        });
+
+        // Handle file upload (supports multiple files)
+        function handleFileUpload(files) {
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+
+            showError('');
+            
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                
+                uploadedFilePaths = data.filepaths;
+                const names = data.filenames.join(', ');
+                fileName.textContent = names + ' (' + data.filepaths.length + 'ファイル)';
+                fileInfo.classList.add('show');
+                startBtn.disabled = false;
+            })
+            .catch(error => {
+                showError('ファイルのアップロードに失敗しました: ' + error.message);
+            });
+        }
+
+        // Start scraping
+        startBtn.addEventListener('click', () => {
+            if (!uploadedFilePaths.length) {
+                showError('まずファイルをアップロードしてください');
+                return;
+            }
+
+            startBtn.disabled = true;
+            startBtn.innerHTML = 'スクレイピング中<span class="spinner"></span>';
+            progressContainer.classList.add('show');
+            statusBox.innerHTML = '';
+            downloadBtn.classList.remove('show');
+            stopBtn.classList.add('show');
+            showError('');
+
+            fetch('/start_scraping', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    filepaths: uploadedFilePaths,
+                    profit_margin: parseFloat(profitMargin.value) / 100,
+                    marketplace_fee: parseFloat(marketplaceFee.value) / 100,
+                    consumption_tax: parseFloat(consumptionTax.value) / 100,
+                    priority_bids: priorityBids
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showError(data.error);
+                    startBtn.disabled = false;
+                    startBtn.textContent = 'スクレイピング開始';
+                    return;
+                }
+                
+                queueId = data.queue_id;
+                connectToStream(queueId);
+            })
+            .catch(error => {
+                showError('スクレイピングの開始に失敗しました: ' + error.message);
+                startBtn.disabled = false;
+                startBtn.textContent = 'スクレイピング開始';
+            });
+        });
+
+        // Connect to Server-Sent Events stream
+        function connectToStream(queueId) {
+            const eventSource = new EventSource(`/stream/${queueId}`);
+            
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.keepalive) {
+                    return;
+                }
+                
+                // Check for download ready
+                if (data.message && data.message.startsWith('DOWNLOAD_READY:')) {
+                    const filepath = data.message.replace('DOWNLOAD_READY:', '');
+                    const filename = filepath.split('/').pop();
+                    downloadBtn.href = `/download/${filename}`;
+                    downloadBtn.classList.add('show');
+                    stopBtn.classList.remove('show');
+                    startBtn.textContent = 'スクレイピング開始';
+                    startBtn.disabled = false;
+                    eventSource.close();
+                    return;
+                }
+                
+                // Update progress
+                if (data.progress !== undefined) {
+                    progressBar.style.width = data.progress + '%';
+                    progressBar.textContent = data.progress + '%';
+                }
+                
+                // Add status message
+                if (data.message) {
+                    const statusItem = document.createElement('div');
+                    statusItem.className = 'status-item';
+                    
+                    let html = `<span class="status-time">${data.timestamp || ''}</span>`;
+                    html += `<span class="status-message">${data.message}</span>`;
+                    
+                    if (data.url) {
+                        html += `<div class="status-url">🔗 ${data.url}</div>`;
+                    }
+                    
+                    statusItem.innerHTML = html;
+                    statusBox.insertBefore(statusItem, statusBox.firstChild);
+                    
+                    // Keep only last 20 items
+                    while (statusBox.children.length > 20) {
+                        statusBox.removeChild(statusBox.lastChild);
+                    }
+                }
+            };
+            
+            eventSource.onerror = () => {
+                stopBtn.classList.remove('show');
+            };
+        }
+
+        // Stop scraping
+        stopBtn.addEventListener('click', () => {
+            if (!confirm('スクレイピングを停止しますか？これまでに収集したデータはダウンロードできます。')) {
+                return;
+            }
+
+            stopBtn.disabled = true;
+            stopBtn.innerHTML = '停止中<span class="spinner"></span>';
+
+            fetch('/stop', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addStatusMessage('⏸ 停止要求を受け付けました...', '現在の商品を完了してデータを保存中');
+                } else {
+                    showError(data.error || '停止に失敗しました');
+                }
+            })
+            .catch(error => {
+                showError('停止に失敗しました: ' + error.message);
+            });
+        });
+
+        // Open output folder
+        folderBtn.addEventListener('click', () => {
+            fetch('/open_folder', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addStatusMessage('📁 出力フォルダを開きました: ' + data.path);
+                } else {
+                    showError(data.error || 'フォルダを開けませんでした');
+                }
+            })
+            .catch(error => {
+                showError('フォルダを開けませんでした: ' + error.message);
+            });
+        });
+
+        // Helper function to add status message
+        function addStatusMessage(message, url = '') {
+            const statusItem = document.createElement('div');
+            statusItem.className = 'status-item';
+            
+            const timestamp = new Date().toLocaleTimeString();
+            let html = `<span class="status-time">${timestamp}</span>`;
+            html += `<span class="status-message">${message}</span>`;
+            
+            if (url) {
+                html += `<div class="status-url">🔗 ${url}</div>`;
+            }
+            
+            statusItem.innerHTML = html;
+            statusBox.insertBefore(statusItem, statusBox.firstChild);
+            
+            // Keep only last 20 items
+            while (statusBox.children.length > 20) {
+                statusBox.removeChild(statusBox.lastChild);
+            }
+        }
+
+        // Show error message
+        function showError(message) {
+            if (message) {
+                errorBox.textContent = message;
+                errorBox.classList.add('show');
+            } else {
+                errorBox.classList.remove('show');
+            }
+        }
+    </script>
+</body>
+</html>
