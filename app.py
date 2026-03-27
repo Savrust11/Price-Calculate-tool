@@ -77,7 +77,7 @@ class ScrapingProgressLogger:
             self.queue.put(json.dumps(data))
 
 
-def scrape_worker(input_files, output_file, queue_id, profit_margin=0.50, marketplace_fee=0.10, consumption_tax=0.10, priority_bids=None):
+def scrape_worker(input_files, output_file, queue_id, profit_margin=0.50, marketplace_fee=0.10, consumption_tax=0.10, priority_bids=None, grade_adjustments=None):
     """Background worker that runs the scraping process."""
     global scraping_status
     scraping_status['running'] = True
@@ -99,6 +99,15 @@ def scrape_worker(input_files, output_file, queue_id, profit_margin=0.50, market
             logger.log(f"  ✓ {os.path.basename(f)}: {len(df)} products")
         
         products_df = pd.concat(all_products, ignore_index=True)
+        # Normalize Details to stripped strings for consistent matching throughout the pipeline
+        if "Details" in products_df.columns:
+            products_df["Details"] = (
+                products_df["Details"]
+                .astype(str)
+                .str.replace("\u3000", " ", regex=False)
+                .str.strip()
+            )
+            products_df = products_df[~products_df["Details"].isin(["nan", "None", ""])]
         total_products = len(products_df)
         
         logger.log(f"Found {total_products} products", progress=5, total=100)
@@ -122,19 +131,21 @@ def scrape_worker(input_files, output_file, queue_id, profit_margin=0.50, market
         if scraped_df is not None and not scraped_df.empty:
             logger.log(f"Analyzing market prices (Profit: {int(profit_margin*100)}%, Fee: {int(marketplace_fee*100)}%, Tax: {int(consumption_tax*100)}%)...", progress=70, total=100)
             market_df = analyse_market_prices(scraped_df)
-            
+
             # Filter products_df to only include scraped products
-            products_df_filtered = products_df[products_df["Details"].isin(scraped_products)].copy()
+            # Normalize Details to stripped strings to match scraped_products (which are str-stripped)
+            products_df_filtered = products_df[products_df["Details"].astype(str).str.strip().isin(scraped_products)].copy()
             logger.log(f"Processing {len(products_df_filtered)} scraped products...", progress=80, total=100)
             
             logger.log("Calculating bid decisions...", progress=85, total=100)
             result_df = apply_bid_decisions(
-                products_df_filtered, 
+                products_df_filtered,
                 market_df,
                 profit_margin=profit_margin,
                 fees=marketplace_fee,
                 tax=consumption_tax,
-                priority_bids=priority_bids
+                priority_bids=priority_bids,
+                grade_adjustments=grade_adjustments
             )
             
             logger.log("Generating Excel output...", progress=95, total=100)
@@ -204,18 +215,15 @@ def run_scraper_with_progress(products_df, output_file, logger, total_products):
         from urllib.parse import urlencode
         search_url = f"{CLOSED_SEARCH_URL}?{urlencode({'p': keyword})}"
         
-        # Calculate progress (10% to 70% range)
-        progress = 10 + int((products_scraped / total_products) * 60)
-        
         logger.log(
             f"Scraping product {products_scraped + 1}/{total_products}: {keyword[:50]}...",
             url=search_url,
-            progress=progress,
+            progress=round(10 + (products_scraped / total_products) * 60, 1),
             total=100
         )
-        
+
         listings = scrape_product(keyword, session)
-        
+
         for item in listings:
             item["Product"] = keyword
             item["Brand"] = brand
@@ -223,10 +231,18 @@ def run_scraper_with_progress(products_df, output_file, logger, total_products):
             if has_box:
                 item["BoxNo"] = box_no
                 item["BranchNo"] = branch_no
-        
+
         all_rows.extend(listings)
         scraped_products.append(keyword)  # Track this product
         products_scraped += 1
+
+        # Update progress after scraping this product
+        progress_after = round(10 + (products_scraped / total_products) * 60, 1)
+        logger.log(
+            f"✓ Done {products_scraped}/{total_products}",
+            progress=progress_after,
+            total=100
+        )
         
         # Save progress periodically
         if idx % 10 == 0:
@@ -375,9 +391,22 @@ def start_scraping():
     for item in priority_bids_list:
         keyword = item.get('keyword', '').strip()
         amount = item.get('amount', 0)
+        grades = item.get('grades', [])  # [] = all grades
         if keyword and amount > 0:
-            priority_bids[keyword] = int(amount)
-    
+            priority_bids[keyword] = {'amount': int(amount), 'grades': grades}
+
+    # Get grade adjustments (UI overrides); fall back to config defaults
+    import config as _config
+    raw_grades = data.get('grade_adjustments', {})
+    grade_adjustments = {
+        'S': float(raw_grades.get('S', _config.GRADE_ADJUSTMENTS.get('S', 1.10))),
+        'A': float(raw_grades.get('A', _config.GRADE_ADJUSTMENTS.get('A', 1.00))),
+        'B': float(raw_grades.get('B', _config.GRADE_ADJUSTMENTS.get('B', 0.90))),
+        'C': float(raw_grades.get('C', _config.GRADE_ADJUSTMENTS.get('C', 0.80))),
+        'J': float(raw_grades.get('J', _config.GRADE_ADJUSTMENTS.get('J', 0.50))),
+        'Ｊ': float(raw_grades.get('J', _config.GRADE_ADJUSTMENTS.get('J', 0.50))),  # fullwidth J
+    }
+
     # Validate settings
     if not (0 <= profit_margin <= 1):
         return jsonify({'error': 'Invalid profit margin'}), 400
@@ -399,7 +428,7 @@ def start_scraping():
     # Start scraping in background thread
     thread = threading.Thread(
         target=scrape_worker,
-        args=(input_files, output_file, queue_id, profit_margin, marketplace_fee, consumption_tax, priority_bids)
+        args=(input_files, output_file, queue_id, profit_margin, marketplace_fee, consumption_tax, priority_bids, grade_adjustments)
     )
     thread.daemon = True
     thread.start()
@@ -454,7 +483,10 @@ def stream(queue_id):
                 # Send keepalive
                 yield f"data: {json.dumps({'keepalive': True})}\n\n"
     
-    return Response(event_stream(), mimetype='text/event-stream')
+    response = Response(event_stream(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
 
 
 @app.route('/download/<filename>')
@@ -474,26 +506,18 @@ def download_file(filename):
 
 @app.route('/open_folder', methods=['POST'])
 def open_output_folder():
-    """Open the output folder in Finder/Explorer."""
-    import subprocess
-    import platform
-    
+    """List output files available for download."""
     folder_path = os.path.abspath(app.config['OUTPUT_FOLDER'])
-    
+
     try:
-        system = platform.system()
-        if system == 'Darwin':  # macOS
-            subprocess.run(['open', folder_path])
-        elif system == 'Windows':
-            subprocess.run(['explorer', folder_path])
-        else:  # Linux
-            subprocess.run(['xdg-open', folder_path])
-        
-        return jsonify({
-            'success': True,
-            'message': 'Folder opened',
-            'path': folder_path
-        })
+        files = []
+        for f in sorted(Path(folder_path).glob('bid_results_*.xlsx'), reverse=True):
+            files.append({
+                'name': f.name,
+                'size_kb': round(f.stat().st_size / 1024, 1),
+                'modified': datetime.fromtimestamp(f.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+            })
+        return jsonify({'success': True, 'files': files, 'path': folder_path})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

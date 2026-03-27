@@ -37,25 +37,37 @@ def round_bid_amount(amount: int) -> int:
     return (amount // 1000) * 1000
 
 
-def get_grade_multiplier(grade: str) -> float:
+def get_grade_multiplier(grade: str, grade_adjustments: dict | None = None) -> float:
     """Look up the grade adjustment multiplier."""
     if not grade or pd.isna(grade):
         return config.DEFAULT_GRADE_ADJUSTMENT
     g = str(grade).strip().upper()
+    if grade_adjustments:
+        return grade_adjustments.get(g, config.DEFAULT_GRADE_ADJUSTMENT)
     return config.GRADE_ADJUSTMENTS.get(g, config.DEFAULT_GRADE_ADJUSTMENT)
 
 
-def match_priority_keyword(details: str, priority_bids: dict[str, int]) -> tuple[str | None, int | None]:
-    """Check if product details match any priority keyword.
+def match_priority_keyword(details: str, priority_bids: dict, grade: str = "") -> tuple[str | None, int | None]:
+    """Check if product details match any priority keyword, respecting grade filter.
 
     Returns (matched_keyword, custom_bid) or (None, None).
     """
     if not details or not priority_bids:
         return None, None
     details_lower = details.lower()
-    for keyword, bid_amount in priority_bids.items():
-        if keyword.lower() in details_lower:
-            return keyword, bid_amount
+    grade_upper = str(grade).strip().upper()
+    for keyword, bid_info in priority_bids.items():
+        if keyword.lower() not in details_lower:
+            continue
+        # Support both old format (int) and new format (dict with grades filter)
+        if isinstance(bid_info, int):
+            return keyword, bid_info
+        amount = bid_info.get('amount', 0)
+        allowed_grades = bid_info.get('grades', [])
+        # Empty list means all grades
+        if allowed_grades and grade_upper not in [g.upper() for g in allowed_grades]:
+            continue  # grade not in allowed list — skip
+        return keyword, amount
     return None, None
 
 
@@ -67,6 +79,7 @@ def calculate_max_bid(
     tax: float = config.CONSUMPTION_TAX,
     priority_bid: int | None = None,
     priority_keyword: str | None = None,
+    grade_adjustments: dict | None = None,
 ) -> dict:
     """Calculate maximum bid for a single product.
 
@@ -101,7 +114,7 @@ def calculate_max_bid(
             "Priority Keyword": None,
         }
 
-    multiplier = get_grade_multiplier(grade)
+    multiplier = get_grade_multiplier(grade, grade_adjustments)
     adjusted_price = market_price * multiplier
 
     # MaxBid = AdjustedPrice × (1 − ProfitMargin − Fees)
@@ -145,6 +158,7 @@ def apply_bid_decisions(
     fees: float = config.MARKETPLACE_FEE,
     tax: float = config.CONSUMPTION_TAX,
     priority_bids: dict[str, int] | None = None,
+    grade_adjustments: dict | None = None,
     **kwargs,
 ) -> pd.DataFrame:
     """Merge market prices with product list and compute bid decisions.
@@ -183,9 +197,10 @@ def apply_bid_decisions(
     # Calculate bids row by row
     calc_rows = []
     for _, row in merged.iterrows():
-        # Check for priority bid match
+        # Check for priority bid match (grade-aware)
         details = str(row.get("Details", ""))
-        p_keyword, p_bid = match_priority_keyword(details, priority_bids)
+        grade = str(row.get("Rank", ""))
+        p_keyword, p_bid = match_priority_keyword(details, priority_bids, grade)
 
         result = calculate_max_bid(
             market_price=row.get("Market Price"),
@@ -195,6 +210,7 @@ def apply_bid_decisions(
             tax=tax,
             priority_bid=p_bid,
             priority_keyword=p_keyword,
+            grade_adjustments=grade_adjustments,
         )
 
         calc_rows.append(result)

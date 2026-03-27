@@ -357,6 +357,91 @@
             font-style: italic;
         }
 
+        /* Grade adjustments section */
+        .grade-section {
+            background: #f0fff4;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 25px 0;
+            border: 2px solid #b2dfdb;
+        }
+
+        .grade-title {
+            color: #00695c;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            text-align: center;
+        }
+
+        .grade-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+        }
+
+        .grade-item {
+            background: white;
+            padding: 12px 10px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            text-align: center;
+        }
+
+        .grade-badge {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            line-height: 30px;
+            font-weight: bold;
+            font-size: 1em;
+            color: white;
+            margin-bottom: 8px;
+        }
+
+        .grade-badge.S { background: #ab47bc; }
+        .grade-badge.A { background: #42a5f5; }
+        .grade-badge.B { background: #66bb6a; }
+        .grade-badge.C { background: #ffa726; }
+        .grade-badge.J { background: #ef5350; }
+
+        .grade-input-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            margin-top: 6px;
+        }
+
+        .grade-input-wrap input[type="number"] {
+            width: 58px;
+            padding: 5px 4px;
+            border: 2px solid #b2dfdb;
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-weight: bold;
+            color: #00695c;
+            text-align: center;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .grade-input-wrap input[type="number"]:focus {
+            border-color: #00897b;
+        }
+
+        .grade-input-wrap span {
+            color: #00695c;
+            font-weight: bold;
+        }
+
+        .grade-hint {
+            font-size: 0.72em;
+            color: #999;
+            margin-top: 4px;
+            font-style: italic;
+        }
+
         .priority-section {
             background: #fff8f0;
             border-radius: 15px;
@@ -472,6 +557,54 @@
             background: #ee5a5a;
         }
 
+        .priority-grade-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            background: #fff3e0;
+            border-radius: 8px;
+            border: 1px solid #ffe0b2;
+            font-size: 0.9em;
+            color: #bf360c;
+            font-weight: 500;
+        }
+
+        .priority-grade-row label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 2px solid #ffb74d;
+            background: white;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .priority-grade-row label:has(input:checked) {
+            background: #e65100;
+            color: white;
+            border-color: #e65100;
+        }
+
+        .priority-grade-row input[type="checkbox"] {
+            display: none;
+        }
+
+        .priority-grades-badge {
+            font-size: 0.78em;
+            background: #e65100;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 4px;
+        }
+
         .priority-empty {
             text-align: center;
             color: #999;
@@ -557,6 +690,53 @@
             </div>
         </div>
 
+        <!-- Grade Adjustment Section -->
+        <div class="grade-section" id="gradeSection">
+            <h3 class="grade-title">📊 グレード係数 / Grade Multipliers</h3>
+            <div class="grade-grid">
+                <div class="grade-item">
+                    <div class="grade-badge S">S</div>
+                    <div class="grade-input-wrap">
+                        <input type="number" id="gradeS" value="1.10" min="0" max="3" step="0.01">
+                        <span>×</span>
+                    </div>
+                    <div class="grade-hint">ほぼ新品</div>
+                </div>
+                <div class="grade-item">
+                    <div class="grade-badge A">A</div>
+                    <div class="grade-input-wrap">
+                        <input type="number" id="gradeA" value="1.00" min="0" max="3" step="0.01">
+                        <span>×</span>
+                    </div>
+                    <div class="grade-hint">良品</div>
+                </div>
+                <div class="grade-item">
+                    <div class="grade-badge B">B</div>
+                    <div class="grade-input-wrap">
+                        <input type="number" id="gradeB" value="0.90" min="0" max="3" step="0.01">
+                        <span>×</span>
+                    </div>
+                    <div class="grade-hint">並品</div>
+                </div>
+                <div class="grade-item">
+                    <div class="grade-badge C">C</div>
+                    <div class="grade-input-wrap">
+                        <input type="number" id="gradeC" value="0.80" min="0" max="3" step="0.01">
+                        <span>×</span>
+                    </div>
+                    <div class="grade-hint">使用感あり</div>
+                </div>
+                <div class="grade-item">
+                    <div class="grade-badge J">J</div>
+                    <div class="grade-input-wrap">
+                        <input type="number" id="gradeJ" value="0.50" min="0" max="3" step="0.01">
+                        <span>×</span>
+                    </div>
+                    <div class="grade-hint">ジャンク</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Priority Bidding Section -->
         <div class="priority-section" id="prioritySection">
             <h3 class="priority-title">🏆 優先入札 / Priority Bidding</h3>
@@ -564,6 +744,16 @@
                 特定の型番やシリーズに対して個別の最大入札金額を設定できます。<br>
                 Set custom max bid amounts for specific camera models or series you must win.
             </p>
+
+            <div class="priority-grade-row">
+                <span>対象グレード:</span>
+                <label><input type="checkbox" class="gradeCheck" value="S" checked>S</label>
+                <label><input type="checkbox" class="gradeCheck" value="A" checked>A</label>
+                <label><input type="checkbox" class="gradeCheck" value="B" checked>B</label>
+                <label><input type="checkbox" class="gradeCheck" value="C" checked>C</label>
+                <label><input type="checkbox" class="gradeCheck" value="J" checked>J</label>
+                <span style="color:#999;font-size:0.85em;font-weight:normal;">全選択=全グレード対象</span>
+            </div>
 
             <div class="priority-add-row">
                 <input type="text" id="priorityKeyword" placeholder="型番 / Model (例: Canon EOS R5)">
@@ -645,17 +835,75 @@
         let queueId = null;
         let priorityBids = [];
 
+        // ── localStorage persistence ──────────────────────────────────────
+        const STORAGE_KEY = 'yahooAuctionSettings';
+
+        function saveSettings() {
+            const settings = {
+                profitMargin: profitMargin.value,
+                marketplaceFee: marketplaceFee.value,
+                consumptionTax: consumptionTax.value,
+                gradeS: document.getElementById('gradeS').value,
+                gradeA: document.getElementById('gradeA').value,
+                gradeB: document.getElementById('gradeB').value,
+                gradeC: document.getElementById('gradeC').value,
+                gradeJ: document.getElementById('gradeJ').value,
+                priorityBids: priorityBids,
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        }
+
+        function loadSettings() {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return;
+            try {
+                const s = JSON.parse(raw);
+                if (s.profitMargin !== undefined) {
+                    profitMargin.value = s.profitMargin;
+                    profitMarginValue.textContent = s.profitMargin + '%';
+                }
+                if (s.marketplaceFee !== undefined) {
+                    marketplaceFee.value = s.marketplaceFee;
+                    marketplaceFeeValue.textContent = s.marketplaceFee + '%';
+                }
+                if (s.consumptionTax !== undefined) {
+                    consumptionTax.value = s.consumptionTax;
+                    consumptionTaxValue.textContent = s.consumptionTax + '%';
+                }
+                if (s.gradeS !== undefined) document.getElementById('gradeS').value = s.gradeS;
+                if (s.gradeA !== undefined) document.getElementById('gradeA').value = s.gradeA;
+                if (s.gradeB !== undefined) document.getElementById('gradeB').value = s.gradeB;
+                if (s.gradeC !== undefined) document.getElementById('gradeC').value = s.gradeC;
+                if (s.gradeJ !== undefined) document.getElementById('gradeJ').value = s.gradeJ;
+                if (Array.isArray(s.priorityBids) && s.priorityBids.length > 0) {
+                    priorityBids = s.priorityBids;
+                    renderPriorityList();
+                }
+            } catch (e) {
+                // ignore corrupt data
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────
+
         // Update setting values when sliders change
         profitMargin.addEventListener('input', (e) => {
             profitMarginValue.textContent = e.target.value + '%';
+            saveSettings();
         });
 
         marketplaceFee.addEventListener('input', (e) => {
             marketplaceFeeValue.textContent = e.target.value + '%';
+            saveSettings();
         });
 
         consumptionTax.addEventListener('input', (e) => {
             consumptionTaxValue.textContent = e.target.value + '%';
+            saveSettings();
+        });
+
+        // Save grade inputs on change
+        ['gradeS','gradeA','gradeB','gradeC','gradeJ'].forEach(id => {
+            document.getElementById(id).addEventListener('input', saveSettings);
         });
 
         // Priority bidding - Add
@@ -666,6 +914,18 @@
         priorityAmount.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') addPriorityBid();
         });
+
+        function getCheckedGrades() {
+            const checked = [...document.querySelectorAll('.gradeCheck:checked')].map(c => c.value);
+            const all = ['S','A','B','C','J'];
+            // If all grades checked, store empty array (= all grades)
+            return checked.length === all.length ? [] : checked;
+        }
+
+        function gradeLabel(grades) {
+            if (!grades || grades.length === 0) return '全グレード';
+            return grades.join(' / ');
+        }
 
         function addPriorityBid() {
             const keyword = priorityKeyword.value.trim();
@@ -686,9 +946,11 @@
                 return;
             }
 
+            const grades = getCheckedGrades();
             showError('');
-            priorityBids.push({ keyword, amount });
+            priorityBids.push({ keyword, amount, grades });
             renderPriorityList();
+            saveSettings();
             priorityKeyword.value = '';
             priorityAmount.value = '';
             priorityKeyword.focus();
@@ -697,6 +959,7 @@
         function removePriorityBid(index) {
             priorityBids.splice(index, 1);
             renderPriorityList();
+            saveSettings();
         }
 
         function renderPriorityList() {
@@ -720,10 +983,12 @@
             priorityBids.forEach((bid, index) => {
                 const li = document.createElement('li');
                 li.className = 'priority-item';
+                const gradesText = gradeLabel(bid.grades);
                 li.innerHTML = `
                     <div class="priority-item-info">
                         <span class="priority-keyword">${escapeHtml(bid.keyword)}</span>
                         <span class="priority-amount">¥${bid.amount.toLocaleString()}</span>
+                        <span class="priority-grades-badge">${gradesText}</span>
                     </div>
                     <button class="priority-remove-btn" onclick="removePriorityBid(${index})">✕ 削除</button>
                 `;
@@ -784,6 +1049,7 @@
                     }
                 }
                 renderPriorityList();
+                saveSettings();
                 addStatusMessage(`✅ ${added}件の優先入札をインポートしました (${data.count}件中)`);
             })
             .catch(error => {
@@ -878,7 +1144,14 @@
                     profit_margin: parseFloat(profitMargin.value) / 100,
                     marketplace_fee: parseFloat(marketplaceFee.value) / 100,
                     consumption_tax: parseFloat(consumptionTax.value) / 100,
-                    priority_bids: priorityBids
+                    priority_bids: priorityBids,
+                    grade_adjustments: {
+                        S: parseFloat(document.getElementById('gradeS').value),
+                        A: parseFloat(document.getElementById('gradeA').value),
+                        B: parseFloat(document.getElementById('gradeB').value),
+                        C: parseFloat(document.getElementById('gradeC').value),
+                        J: parseFloat(document.getElementById('gradeJ').value),
+                    }
                 })
             })
             .then(response => response.json())
@@ -982,21 +1255,38 @@
             });
         });
 
-        // Open output folder
+        // Open output folder — shows list of downloadable files
         folderBtn.addEventListener('click', () => {
             fetch('/open_folder', {
                 method: 'POST'
             })
             .then(response => response.json())
             .then(data => {
-                if (data.success) {
-                    addStatusMessage('📁 出力フォルダを開きました: ' + data.path);
-                } else {
-                    showError(data.error || 'フォルダを開けませんでした');
+                if (!data.success) {
+                    showError(data.error || 'ファイル一覧を取得できませんでした');
+                    return;
                 }
+                if (data.files.length === 0) {
+                    addStatusMessage('📁 出力ファイルがまだありません');
+                    return;
+                }
+                // Show each file as a clickable download link in status box
+                data.files.forEach(f => {
+                    const item = document.createElement('div');
+                    item.className = 'status-item';
+                    item.innerHTML = `
+                        <span class="status-time">${f.modified}</span>
+                        <a href="/download/${encodeURIComponent(f.name)}" download style="color:#667eea;font-weight:bold;">
+                            📥 ${f.name}
+                        </a>
+                        <span style="color:#999;font-size:0.85em;margin-left:10px;">${f.size_kb} KB</span>
+                    `;
+                    statusBox.insertBefore(item, statusBox.firstChild);
+                });
+                progressContainer.classList.add('show');
             })
             .catch(error => {
-                showError('フォルダを開けませんでした: ' + error.message);
+                showError('ファイル一覧を取得できませんでした: ' + error.message);
             });
         });
 
@@ -1031,6 +1321,9 @@
                 errorBox.classList.remove('show');
             }
         }
+
+        // Load saved settings on page load
+        loadSettings();
     </script>
 </body>
 </html>

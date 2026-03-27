@@ -124,6 +124,15 @@ def pipeline(
         config.CONSUMPTION_TAX * 100,
     )
     products_df = read_input_products(input_file)
+    # Normalize Details to stripped strings for consistent merge with market data
+    if "Details" in products_df.columns:
+        products_df["Details"] = (
+            products_df["Details"]
+            .astype(str)
+            .str.replace("\u3000", " ", regex=False)
+            .str.strip()
+        )
+        products_df = products_df[~products_df["Details"].isin(["nan", "None", ""])]
     results_df = apply_bid_decisions(products_df, market_df)
 
     # ------------------------------------------------------------------

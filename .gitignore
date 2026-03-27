@@ -2,6 +2,10 @@
 .env
 .venv/
 venv/
+myenv/
+
+# Claude Code
+.claude/
 
 # Python
 __pycache__/

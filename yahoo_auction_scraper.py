@@ -146,9 +146,15 @@ def read_input_products(filepath: str) -> pd.DataFrame:
         if "BranchNo" in df.columns:
             df["BranchNo"] = pd.to_numeric(df["BranchNo"], errors="coerce")
         
-        # Drop rows where Details is empty
+        # Normalize Details: strip whitespace (including fullwidth spaces) and drop empty
         if "Details" in df.columns:
-            df = df.dropna(subset=["Details"])
+            df["Details"] = (
+                df["Details"]
+                .astype(str)
+                .str.replace("\u3000", " ", regex=False)   # fullwidth space → normal
+                .str.strip()
+            )
+            df = df[~df["Details"].isin(["nan", "None", ""])]
         elif "Brand" in df.columns:
             # If no Details column, try to use Brand as product identifier
             logger.warning("No 'Details' column found, using 'Brand' column")
@@ -189,6 +195,17 @@ def read_input_products(filepath: str) -> pd.DataFrame:
                     f"Available columns: {list(df.columns)}"
                 )
 
+    # Final normalization for all paths: ensure Details is clean
+    if "Details" in df.columns:
+        df["Details"] = (
+            df["Details"]
+            .astype(str)
+            .str.replace("\u3000", " ", regex=False)
+            .str.strip()
+        )
+        df = df[~df["Details"].isin(["nan", "None", ""])]
+        df = df.reset_index(drop=True)
+
     logger.info("Loaded %d products from %s", len(df), filepath)
     return df
 
@@ -198,11 +215,17 @@ def read_input_products(filepath: str) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def build_search_url(keyword: str, page: int = 1, per_page: int = 20) -> str:
-    """Build the closed-search URL for the given keyword and page offset."""
+    """Build the closed-search URL for the given keyword and page offset.
+
+    Uses Yahoo Auctions' exact-phrase parameter (``ve``) so that short model
+    names like "Nikon F" or "OLYMPUS μ" don't pull in unrelated listings
+    (e.g. "Nikon FM2", "Nikon F100").  The ``va`` (all-words / AND) approach
+    treated every word independently, matching far too broadly for short names.
+    """
     offset = (page - 1) * per_page + 1
     params = {
-        "p": keyword,
-        "va": keyword,
+        "p": keyword,       # display keyword
+        "ve": keyword,      # exact phrase — much more precise than ``va``
         "b": offset,
         "n": per_page,
     }
