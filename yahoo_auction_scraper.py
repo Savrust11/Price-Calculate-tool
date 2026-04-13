@@ -18,6 +18,8 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
+import config
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -26,13 +28,13 @@ INPUT_FILE = "26.0227_第195回VCA入札シート (1).xlsx"
 OUTPUT_FILE = "sold_listings_output.xlsx"
 
 # Number of result pages to scrape per product (each page = 20 items)
-MAX_PAGES_PER_PRODUCT = 3
+MAX_PAGES_PER_PRODUCT = config.MAX_PAGES_PER_PRODUCT
 
 # Maximum listings to collect per product (None = unlimited)
-MAX_LISTINGS_PER_PRODUCT = None
+MAX_LISTINGS_PER_PRODUCT = config.MAX_LISTINGS_PER_PRODUCT
 
 # Delay range (seconds) between HTTP requests to avoid being blocked
-REQUEST_DELAY = (1, 2)
+REQUEST_DELAY = (0.5, 1.0)
 
 # Save progress every N products
 SAVE_EVERY = 50
@@ -51,6 +53,301 @@ HEADERS = {
 }
 
 CLOSED_SEARCH_URL = "https://auctions.yahoo.co.jp/closedsearch/closedsearch"
+
+
+# ---------------------------------------------------------------------------
+# Accessory / non-product listing filter
+# ---------------------------------------------------------------------------
+# Titles containing these substrings are almost certainly accessories,
+# rentals, books, or other non-product listings that pollute the median.
+
+ACCESSORY_KEYWORDS = [
+    # Batteries & chargers
+    "互換バッテリー", "互換充電器", "互換品",
+    # Rentals (not a sale)
+    "レンタル",
+    # Box / manual only
+    "元箱のみ", "箱のみ", "外箱のみ",
+    "取扱説明書", "取説のみ", "使用説明書",
+    # Power accessories
+    "ACアダプター", "DCカプラー",
+    # Grips (battery grip is an accessory)
+    "バッテリーグリップ",
+    # Cases & covers
+    "カメラケース", "DSLRカメラケース",
+    # Adapters & mounts
+    "マウントアダプター",
+    # Screen protectors
+    "保護フィルム", "液晶保護", "ガラスフィルム",
+    # L-plates / brackets
+    "L型プレート", "Lプレート", "L型ブラケット",
+    # Books / magazines / catalogs
+    "ガイドブック", "ムック本", "カタログ",
+    # Straps / caps / hoods
+    "ストラップのみ", "レンズキャップのみ", "ボディキャップのみ",
+    "レンズフード単体",
+    # Repair / parts only
+    "部品取り", "ジャンク部品", "分解パーツ",
+    # Remote / shutter release
+    "リモコンのみ", "レリーズのみ",
+]
+
+# Regex patterns for accessory listings (compiled once)
+_ACCESSORY_RE = [
+    re.compile(r"^▲?\d+冊\s"),           # "3冊 Canon …" = book bundle
+    re.compile(r"用\s*(元箱|外箱)\s*$"),   # "… 用元箱" = box for …
+    re.compile(r"レンジファインダーカメラ\s*カタログ"),  # camera catalog
+]
+
+
+def is_accessory_listing(title: str) -> bool:
+    """Return True if the listing title indicates an accessory, not the product itself."""
+    for kw in ACCESSORY_KEYWORDS:
+        if kw in title:
+            return True
+    for pat in _ACCESSORY_RE:
+        if pat.search(title):
+            return True
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Katakana brand name → English conversion
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Environment-dependent character normalization
+# ---------------------------------------------------------------------------
+# Roman numerals (Ⅱ U+2161, Ⅲ U+2162, …) and variant Greek letters look
+# identical to users but don't match ASCII equivalents in exact searches.
+# Normalize them before building search keywords.
+
+_SPECIAL_CHAR_MAP: dict[str, str] = {
+    '\u2160': 'I',    # Ⅰ
+    '\u2161': 'II',   # Ⅱ
+    '\u2162': 'III',  # Ⅲ
+    '\u2163': 'IV',   # Ⅳ
+    '\u2164': 'V',    # Ⅴ
+    '\u2165': 'VI',   # Ⅵ
+    '\u2166': 'VII',  # Ⅶ
+    '\u2167': 'VIII', # Ⅷ
+    '\u2168': 'IX',   # Ⅸ
+    '\u2169': 'X',    # Ⅹ
+    # Lowercase roman
+    '\u2170': 'i',    # ⅰ
+    '\u2171': 'ii',   # ⅱ
+    '\u2172': 'iii',  # ⅲ
+    # Greek α variants — Sony α cameras use U+03B1; normalize to plain 'a'
+    # so searches work regardless of which encoding the seller used.
+    '\u03b1': '\u03b1',  # already canonical; kept for explicit awareness
+    # Fullwidth slash → ASCII slash
+    '\uff0f': '/',
+    # Middle dot → space
+    '\u30fb': ' ',
+    '\u00b7': ' ',
+}
+
+
+def _normalize_special_chars(text: str) -> str:
+    """Replace Roman-numeral chars, fullwidth punctuation, etc. with ASCII equivalents."""
+    for src, dst in _SPECIAL_CHAR_MAP.items():
+        if src in text:
+            text = text.replace(src, dst)
+    return text
+
+
+KATAKANA_BRAND_MAP = {
+    'ニコン': 'Nikon',
+    'キャノン': 'Canon',
+    'キヤノン': 'Canon',
+    'ソニー': 'Sony',
+    'コンタックス': 'Contax',
+    'ライカ': 'Leica',
+    'オリンパス': 'Olympus',
+    'パナソニック': 'Panasonic',
+    'ルミックス': 'Lumix',
+    'フジフイルム': 'Fujifilm',
+    'フジフィルム': 'Fujifilm',
+    '富士フイルム': 'Fujifilm',
+    '富士フィルム': 'Fujifilm',
+    'ペンタックス': 'Pentax',
+    'ミノルタ': 'Minolta',
+    'シグマ': 'Sigma',
+    'タムロン': 'Tamron',
+    'ヤシカ': 'Yashica',
+    'マミヤ': 'Mamiya',
+    'ハッセルブラッド': 'Hasselblad',
+    'ゼンザブロニカ': 'Zenza Bronica',
+    'リコー': 'Ricoh',
+    'ローライ': 'Rollei',
+    'フォクトレンダー': 'Voigtlander',
+    'ケンコー': 'Kenko',
+    'トキナー': 'Tokina',
+    'ツァイス': 'Zeiss',
+}
+
+
+def translate_brand_name(text: str) -> str:
+    """Replace katakana brand names with their English equivalents.
+
+    Sorts by length (longest first) to avoid partial replacements.
+    """
+    for katakana in sorted(KATAKANA_BRAND_MAP, key=len, reverse=True):
+        if katakana in text:
+            text = text.replace(katakana, KATAKANA_BRAND_MAP[katakana])
+    return text
+
+
+# ---------------------------------------------------------------------------
+# English brand → canonical katakana (for Yahoo Japan search)
+# ---------------------------------------------------------------------------
+# Yahoo Auction Japan sellers predominantly list with katakana brand names.
+# When the cleaned keyword uses an English brand (e.g. "Nikon D300"), the
+# exact-phrase search misses listings that say "ニコン D300".
+# This map provides the single most common katakana spelling for each brand.
+
+BRAND_ENGLISH_TO_KATAKANA: dict[str, str] = {
+    'Nikon':        'ニコン',
+    'Canon':        'キヤノン',   # Canon Japan's official spelling
+    'Sony':         'ソニー',
+    'Contax':       'コンタックス',
+    'Leica':        'ライカ',
+    'Olympus':      'オリンパス',
+    'Panasonic':    'パナソニック',
+    'Lumix':        'ルミックス',
+    'Fujifilm':     'フジフイルム',
+    'Pentax':       'ペンタックス',
+    'Minolta':      'ミノルタ',
+    'Sigma':        'シグマ',
+    'Tamron':       'タムロン',
+    'Yashica':      'ヤシカ',
+    'Mamiya':       'マミヤ',
+    'Hasselblad':   'ハッセルブラッド',
+    'Zenza Bronica': 'ゼンザブロニカ',
+    'Ricoh':        'リコー',
+    'Rollei':       'ローライ',
+    'Voigtlander':  'フォクトレンダー',
+    'Kenko':        'ケンコー',
+    'Tokina':       'トキナー',
+    'Zeiss':        'ツァイス',
+}
+
+# All known English brand names (sorted longest-first to avoid partial matches)
+_ENGLISH_BRANDS_SORTED = sorted(BRAND_ENGLISH_TO_KATAKANA, key=len, reverse=True)
+
+
+def _to_katakana_brand_keyword(text: str) -> str:
+    """Return a copy of *text* with the leading English brand replaced by katakana.
+
+    Only replaces the brand name at the START of the keyword (or when it
+    appears as a standalone word) to avoid corrupting model-name tokens.
+
+    Returns the original string unchanged if no English brand is found.
+    """
+    for brand in _ENGLISH_BRANDS_SORTED:
+        # Match at start of string followed by a space, or the whole string
+        if text == brand:
+            return BRAND_ENGLISH_TO_KATAKANA[brand]
+        if text.startswith(brand + ' '):
+            return BRAND_ENGLISH_TO_KATAKANA[brand] + text[len(brand):]
+    return text
+
+
+def _detect_brand(keyword: str) -> str:
+    """Return the English brand name at the start of *keyword*, or '' if none found."""
+    for brand in _ENGLISH_BRANDS_SORTED:
+        if keyword == brand or keyword.startswith(brand + ' '):
+            return brand
+    return ""
+
+
+def extract_grade_from_details(details: str) -> tuple[str, str]:
+    """Extract grade from 【X】 or [X] bracket pattern in a details string.
+
+    Returns (cleaned_details, grade).  If no grade bracket is found,
+    grade is an empty string and details is returned unchanged.
+    """
+    # Match 【A】 / [A] / ［A］ style brackets containing a single letter
+    m = re.search(r'[【\[［]([A-Za-zＡ-Ｚ])[】\]］]', details)
+    grade = ''
+    if m:
+        raw_grade = m.group(1)
+        # Convert fullwidth letters (Ａ–Ｚ) to ASCII
+        if ord(raw_grade) >= 0xFF21:
+            raw_grade = chr(ord(raw_grade) - 0xFF21 + ord('A'))
+        grade = raw_grade.strip().upper()
+        # Remove the bracket (and any surrounding whitespace) from details
+        details = re.sub(r'\s*[【\[［][A-Za-zＡ-Ｚ][】\]］]', '', details).strip()
+    return details, grade
+
+
+def _clean_part(text: str) -> str:
+    """Remove grade brackets, serial numbers, and parenthesised content.
+
+    Examples
+    --------
+    >>> _clean_part("Nikon D800 (2058100)")
+    'Nikon D800'
+    >>> _clean_part("AF 70-300mm F4-5.6 D ED (35281)")
+    'AF 70-300mm F4-5.6 D ED'
+    >>> _clean_part("Nikon D800E 2013905")
+    'Nikon D800E'
+    >>> _clean_part("コンタックス RTS/Planar 1.750mm 【J】")
+    'Contax RTS/Planar 1.750mm'
+    """
+    # Normalize environment-dependent chars (Ⅱ→II, fullwidth punct, etc.)
+    text = _normalize_special_chars(text)
+    # Remove grade brackets like 【B】, [C], ［D］
+    text = re.sub(r'\s*[【\[［][A-Za-zＡ-Ｚ][】\]］]', '', text).strip()
+    # Remove parenthesised content (often serial numbers like (2058100))
+    text = re.sub(r"\s*\([^)]*\)", "", text).strip()
+    # Remove trailing standalone serial numbers (6+ consecutive digits)
+    text = re.sub(r"\s+\d{6,}\b", "", text).strip()
+    # Translate katakana brand names to English
+    text = translate_brand_name(text)
+    return text
+
+
+def extract_search_keywords(details: str) -> list[str]:
+    """Extract search keywords from product details.
+
+    If the details contain "/" (body / lens), returns separate cleaned
+    keywords for each part so they can be scraped independently and
+    their market prices summed.
+
+    Exception: when ALL parts after "/" start with a known brand name the
+    record is a *lot* (multiple bodies), not a body/lens combo.  In that case
+    the original string is searched as a single keyword so the prices are not
+    incorrectly summed.
+
+    Examples
+    --------
+    >>> extract_search_keywords("Nikon D800 (2058100) / AF 70-300mm F4-5.6 D ED (35281)")
+    ['Nikon D800', 'AF 70-300mm F4-5.6 D ED']
+    >>> extract_search_keywords("Nikon D800 2006066 / E Zoom 36-72mm F3.5")
+    ['Nikon D800', 'E Zoom 36-72mm F3.5']
+    >>> extract_search_keywords("Nikon D800 (2017019)")
+    ['Nikon D800']
+    >>> extract_search_keywords("Nikon D800E 2013905")
+    ['Nikon D800E']
+    >>> extract_search_keywords("Canon 10D (serial) / Canon EOS Kiss Digital X / Canon EOS Kiss")
+    ['Canon 10D / Canon EOS Kiss Digital X / Canon EOS Kiss']
+    """
+    parts = [p.strip() for p in details.split("/")]
+
+    if len(parts) > 1:
+        cleaned_parts = [_clean_part(p) for p in parts]
+        # If every part starts with a known brand, treat as a lot — don't split.
+        if all(_detect_brand(cp) for cp in cleaned_parts if cp):
+            lot_kw = " / ".join(cp for cp in cleaned_parts if cp)
+            logger.debug("  Lot detected (all parts have brand) — single search: %r", lot_kw)
+            return [lot_kw] if lot_kw else [details]
+
+        keywords = [cp for cp in cleaned_parts if cp]
+        return keywords if keywords else [details]
+
+    cleaned = _clean_part(parts[0])
+    return [cleaned] if cleaned else [details]
 
 logging.basicConfig(
     level=logging.INFO,
@@ -147,6 +444,7 @@ def read_input_products(filepath: str) -> pd.DataFrame:
             df["BranchNo"] = pd.to_numeric(df["BranchNo"], errors="coerce")
         
         # Normalize Details: strip whitespace (including fullwidth spaces) and drop empty
+        # Grade extraction and katakana translation happen in the final normalization below.
         if "Details" in df.columns:
             df["Details"] = (
                 df["Details"]
@@ -195,7 +493,10 @@ def read_input_products(filepath: str) -> pd.DataFrame:
                     f"Available columns: {list(df.columns)}"
                 )
 
-    # Final normalization for all paths: ensure Details is clean
+    # Final normalization for all paths: ensure Details is clean,
+    # grade brackets extracted, and katakana brands translated.
+    # These functions are idempotent — safe to call even if the structured
+    # path above already processed the data.
     if "Details" in df.columns:
         df["Details"] = (
             df["Details"]
@@ -204,6 +505,23 @@ def read_input_products(filepath: str) -> pd.DataFrame:
             .str.strip()
         )
         df = df[~df["Details"].isin(["nan", "None", ""])]
+
+        extracted_grades = []
+        cleaned_details = []
+        for detail in df["Details"]:
+            clean, grade = extract_grade_from_details(str(detail))
+            clean = translate_brand_name(clean).strip()
+            cleaned_details.append(clean)
+            extracted_grades.append(grade)
+
+        if "Rank" not in df.columns:
+            df["Rank"] = extracted_grades
+        else:
+            for i, (existing_rank, extracted) in enumerate(zip(df["Rank"], extracted_grades)):
+                if extracted and (pd.isna(existing_rank) or str(existing_rank).strip() in ('', 'nan', 'None')):
+                    df.iloc[i, df.columns.get_loc("Rank")] = extracted
+
+        df["Details"] = cleaned_details
         df = df.reset_index(drop=True)
 
     logger.info("Loaded %d products from %s", len(df), filepath)
@@ -377,12 +695,42 @@ def clean_price(raw: str) -> float | None:
 # ---------------------------------------------------------------------------
 
 def scrape_product(keyword: str, session: requests.Session) -> list[dict]:
-    """Scrape sold listings for a single keyword across multiple pages."""
+    """Scrape sold listings for a single keyword across multiple pages.
+
+    When the keyword contains "/" (body / lens), each part is scraped
+    separately.  The returned listings carry a ``_search_part`` tag so
+    that the market-analysis phase can sum the per-part medians.
+    """
+    search_keywords = extract_search_keywords(keyword)
+    if len(search_keywords) > 1:
+        logger.info("  Composite product detected — scraping parts separately: %s", search_keywords)
+        # Derive body brand from first part so lens parts (which often have no brand
+        # prefix, e.g. "AF NIKKOR 50mm F1.4") can still be searched with brand context.
+        body_brand = _detect_brand(search_keywords[0])
+        all_results = []
+        for i, part_kw in enumerate(search_keywords):
+            hint = body_brand if i > 0 and not _detect_brand(part_kw) else ""
+            part_listings = _scrape_single_keyword(part_kw, session, brand_hint=hint)
+            for item in part_listings:
+                item["_search_part"] = part_kw
+            all_results.extend(part_listings)
+        return all_results
+
+    search_kw = search_keywords[0]
+    if search_kw != keyword:
+        logger.info("  Search keyword cleaned: %r → %r", keyword, search_kw)
+    return _scrape_single_keyword(search_kw, session)
+
+
+def _scrape_keyword_pages(search_kw: str, session: requests.Session) -> list[dict]:
+    """Scrape sold listings for one exact keyword across multiple pages."""
     all_results = []
     limit = MAX_LISTINGS_PER_PRODUCT
 
     for page in range(1, MAX_PAGES_PER_PRODUCT + 1):
-        url = build_search_url(keyword, page=page)
+        _polite_sleep()
+
+        url = build_search_url(search_kw, page=page)
         logger.info("  Page %d → %s", page, url)
 
         soup = fetch_page(url, session)
@@ -395,9 +743,14 @@ def scrape_product(keyword: str, session: requests.Session) -> list[dict]:
             logger.info("  No more results on page %d — stopping.", page)
             break
 
+        # Filter out accessory / non-product listings
+        before = len(listings)
+        listings = [l for l in listings if not is_accessory_listing(l.get("Title", ""))]
+        if before != len(listings):
+            logger.info("  Filtered %d accessory listings (kept %d)", before - len(listings), len(listings))
+
         all_results.extend(listings)
 
-        # Enforce per-product listing cap
         if limit is not None and len(all_results) >= limit:
             all_results = all_results[:limit]
             logger.info("  Reached max listings limit (%d) — stopping.", limit)
@@ -405,8 +758,60 @@ def scrape_product(keyword: str, session: requests.Session) -> list[dict]:
 
         logger.info("  Collected %d listings from page %d", len(listings), page)
 
-        if page < MAX_PAGES_PER_PRODUCT:
-            _polite_sleep()
+    return all_results
+
+
+def _scrape_single_keyword(
+    search_kw: str,
+    session: requests.Session,
+    brand_hint: str = "",
+) -> list[dict]:
+    """Scrape sold listings for a keyword using English and/or katakana brand variants.
+
+    Three search strategies are applied depending on what brand information is available:
+
+    1. Keyword already has an English brand (e.g. "Nikon D300"):
+       → Search with English brand  +  search with katakana brand ("ニコン D300").
+
+    2. Keyword has no brand but a brand_hint is provided (lens part after "/" split):
+       → Search with plain keyword  +  search with katakana brand prepended
+         (e.g. "ニコン AF NIKKOR 50mm F1.4"), so brand-prefixed Yahoo listings
+         are also found.
+
+    3. Keyword has no brand and no hint (rare — model-only like "E Zoom 36-72mm"):
+       → Single search with the keyword as-is.
+
+    Results from multiple searches are merged and deduplicated by URL.
+    """
+    all_results: list[dict] = []
+    seen_urls: set[str] = set()
+
+    def _add(listings: list[dict]) -> None:
+        for r in listings:
+            if r["URL"] not in seen_urls:
+                all_results.append(r)
+                seen_urls.add(r["URL"])
+
+    katakana_kw = _to_katakana_brand_keyword(search_kw)
+    keyword_has_brand = katakana_kw != search_kw
+
+    if keyword_has_brand:
+        # Strategy 1: keyword owns a brand — search English + katakana
+        logger.info("  Dual search: EN=%r  JA=%r", search_kw, katakana_kw)
+        _add(_scrape_keyword_pages(search_kw, session))
+        _add(_scrape_keyword_pages(katakana_kw, session))
+    else:
+        # Strategy 2 or 3: no brand in keyword
+        _add(_scrape_keyword_pages(search_kw, session))
+        if brand_hint:
+            katakana_brand = BRAND_ENGLISH_TO_KATAKANA.get(brand_hint, "")
+            if katakana_brand:
+                branded_kw = katakana_brand + " " + search_kw
+                logger.info("  Brand-hinted search: %r", branded_kw)
+                _add(_scrape_keyword_pages(branded_kw, session))
+
+    if len(all_results) > 0:
+        logger.info("  Total unique listings collected: %d", len(all_results))
 
     return all_results
 
@@ -424,7 +829,11 @@ def _save_results(all_rows: list[dict], out_cols: list[str], output_file: str):
     if result_df.empty:
         result_df = pd.DataFrame(columns=out_cols)
     else:
-        result_df = result_df[out_cols]
+        # Keep _search_part column if present (needed for composite price calculation)
+        save_cols = list(out_cols)
+        if "_search_part" in result_df.columns:
+            save_cols.append("_search_part")
+        result_df = result_df[[c for c in save_cols if c in result_df.columns]]
     if output_file.endswith(".csv"):
         result_df.to_csv(output_file, index=False, encoding="utf-8-sig")
     else:
@@ -580,10 +989,26 @@ def scrape_product_selenium(keyword: str, driver, max_pages: int = 3, max_listin
     """
     from selenium.webdriver.common.by import By  # pyright: ignore[reportMissingImports]  # noqa: E402
 
+    search_keywords = extract_search_keywords(keyword)
+    if len(search_keywords) > 1:
+        all_results = []
+        for part_kw in search_keywords:
+            part_listings = _scrape_single_keyword_selenium(part_kw, driver, max_pages, max_listings)
+            for item in part_listings:
+                item["_search_part"] = part_kw
+            all_results.extend(part_listings)
+        return all_results
+    return _scrape_single_keyword_selenium(search_keywords[0], driver, max_pages, max_listings)
+
+
+def _scrape_single_keyword_selenium(search_kw: str, driver, max_pages: int = 3, max_listings: int | None = None) -> list[dict]:
+    """Selenium scraper for a single keyword."""
+    from selenium.webdriver.common.by import By  # pyright: ignore[reportMissingImports]  # noqa: E402
+
     all_results = []
 
     for page in range(1, max_pages + 1):
-        url = build_search_url(keyword, page=page)
+        url = build_search_url(search_kw, page=page)
         logger.info("  [Selenium] Page %d → %s", page, url)
 
         driver.get(url)
@@ -595,6 +1020,12 @@ def scrape_product_selenium(keyword: str, driver, max_pages: int = 3, max_listin
         if not listings:
             logger.info("  No more results on page %d — stopping.", page)
             break
+
+        # Filter out accessory / non-product listings
+        before = len(listings)
+        listings = [l for l in listings if not is_accessory_listing(l.get("Title", ""))]
+        if before != len(listings):
+            logger.info("  Filtered %d accessory listings (kept %d)", before - len(listings), len(listings))
 
         all_results.extend(listings)
 

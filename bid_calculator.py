@@ -47,8 +47,14 @@ def get_grade_multiplier(grade: str, grade_adjustments: dict | None = None) -> f
     return config.GRADE_ADJUSTMENTS.get(g, config.DEFAULT_GRADE_ADJUSTMENT)
 
 
-def match_priority_keyword(details: str, priority_bids: dict, grade: str = "") -> tuple[str | None, int | None]:
+def match_priority_keyword(details: str, priority_bids: dict | list, grade: str = "") -> tuple[str | None, int | None]:
     """Check if product details match any priority keyword, respecting grade filter.
+
+    Supports two formats:
+      - list of dicts: [{'keyword': ..., 'amount': ..., 'grades': [...]}, ...]
+        (new format — allows same keyword with different grades)
+      - dict:  {keyword: amount_or_dict, ...}
+        (legacy format for backwards compatibility)
 
     Returns (matched_keyword, custom_bid) or (None, None).
     """
@@ -56,17 +62,28 @@ def match_priority_keyword(details: str, priority_bids: dict, grade: str = "") -
         return None, None
     details_lower = details.lower()
     grade_upper = str(grade).strip().upper()
-    for keyword, bid_info in priority_bids.items():
+
+    # Normalise to a common iterable of (keyword, amount, allowed_grades)
+    if isinstance(priority_bids, list):
+        entries = [
+            (item.get('keyword', ''), item.get('amount', 0), item.get('grades', []))
+            for item in priority_bids
+        ]
+    else:
+        # Legacy dict format
+        entries = []
+        for kw, bid_info in priority_bids.items():
+            if isinstance(bid_info, int):
+                entries.append((kw, bid_info, []))
+            else:
+                entries.append((kw, bid_info.get('amount', 0), bid_info.get('grades', [])))
+
+    for keyword, amount, allowed_grades in entries:
         if keyword.lower() not in details_lower:
             continue
-        # Support both old format (int) and new format (dict with grades filter)
-        if isinstance(bid_info, int):
-            return keyword, bid_info
-        amount = bid_info.get('amount', 0)
-        allowed_grades = bid_info.get('grades', [])
-        # Empty list means all grades
+        # Empty allowed_grades means all grades
         if allowed_grades and grade_upper not in [g.upper() for g in allowed_grades]:
-            continue  # grade not in allowed list — skip
+            continue
         return keyword, amount
     return None, None
 
@@ -157,7 +174,7 @@ def apply_bid_decisions(
     profit_margin: float = config.PROFIT_MARGIN,
     fees: float = config.MARKETPLACE_FEE,
     tax: float = config.CONSUMPTION_TAX,
-    priority_bids: dict[str, int] | None = None,
+    priority_bids: dict | list | None = None,
     grade_adjustments: dict | None = None,
     **kwargs,
 ) -> pd.DataFrame:

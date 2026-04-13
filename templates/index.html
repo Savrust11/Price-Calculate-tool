@@ -940,13 +940,24 @@
                 return;
             }
 
-            // Check for duplicate
-            if (priorityBids.some(b => b.keyword.toLowerCase() === keyword.toLowerCase())) {
-                showError('この型番は既に追加されています');
+            // Check for duplicate: same keyword AND overlapping grades
+            const grades = getCheckedGrades();
+            const isDuplicate = priorityBids.some(b => {
+                if (b.keyword.toLowerCase() !== keyword.toLowerCase()) return false;
+                // Both are "all grades" (empty array)
+                if (b.grades.length === 0 && grades.length === 0) return true;
+                // Check for grade overlap
+                if (b.grades.length === 0 || grades.length === 0) {
+                    // One covers all grades — warn about overlap
+                    return true;
+                }
+                return b.grades.some(g => grades.includes(g));
+            });
+            if (isDuplicate) {
+                showError('この型番+グレードの組み合わせは既に登録されています（グレードが重複しています）');
                 return;
             }
 
-            const grades = getCheckedGrades();
             showError('');
             priorityBids.push({ keyword, amount, grades });
             renderPriorityList();
@@ -1039,10 +1050,16 @@
                     return;
                 }
 
-                // Merge imported bids (skip duplicates)
+                // Merge imported bids (skip duplicates — same keyword + overlapping grades)
                 let added = 0;
                 for (const bid of data.priority_bids) {
-                    const exists = priorityBids.some(b => b.keyword.toLowerCase() === bid.keyword.toLowerCase());
+                    const bidGrades = bid.grades || [];
+                    const exists = priorityBids.some(b => {
+                        if (b.keyword.toLowerCase() !== bid.keyword.toLowerCase()) return false;
+                        if (b.grades.length === 0 && bidGrades.length === 0) return true;
+                        if (b.grades.length === 0 || bidGrades.length === 0) return true;
+                        return b.grades.some(g => bidGrades.includes(g));
+                    });
                     if (!exists) {
                         priorityBids.push(bid);
                         added++;

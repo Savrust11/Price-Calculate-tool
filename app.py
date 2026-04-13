@@ -177,44 +177,43 @@ def scrape_worker(input_files, output_file, queue_id, profit_margin=0.50, market
 
 def run_scraper_with_progress(products_df, output_file, logger, total_products):
     """Run scraper with progress updates.
-    
+
     Args:
         products_df: DataFrame of products to scrape (already merged from all files)
-    
+
     Returns:
         tuple: (scraped_df, scraped_products) - scraped data and list of product names scraped
     """
     import requests
-    from yahoo_auction_scraper import scrape_product, _get_out_cols
-    
+    from yahoo_auction_scraper import scrape_product, _get_out_cols, CLOSED_SEARCH_URL
+    from urllib.parse import urlencode
+
     has_box = "BoxNo" in products_df.columns
     out_cols = _get_out_cols(has_box)
-    
+
     all_rows = []
     session = requests.Session()
     products_scraped = 0
     scraped_products = []  # Track which products were scraped
-    
+
     for idx, (_, row) in enumerate(products_df.iterrows(), start=1):
         # Check if stop was requested
         if scraping_status['stop_requested']:
             logger.log(f"⏹ Stop requested. Scraped {products_scraped} products so far.", progress=70, total=100)
             break
-            
+
         keyword = str(row["Details"]).strip()
         brand = str(row.get("Brand", "")).strip() if "Brand" in products_df.columns else ""
         rank = str(row.get("Rank", "")).strip() if "Rank" in products_df.columns else ""
         box_no = row.get("BoxNo", "") if has_box else ""
         branch_no = row.get("BranchNo", "") if has_box else ""
-        
+
         if not keyword:
             continue
-        
+
         # Build search URL for display
-        from yahoo_auction_scraper import CLOSED_SEARCH_URL
-        from urllib.parse import urlencode
         search_url = f"{CLOSED_SEARCH_URL}?{urlencode({'p': keyword})}"
-        
+
         logger.log(
             f"Scraping product {products_scraped + 1}/{total_products}: {keyword[:50]}...",
             url=search_url,
@@ -243,16 +242,26 @@ def run_scraper_with_progress(products_df, output_file, logger, total_products):
             progress=progress_after,
             total=100
         )
-        
+
         # Save progress periodically
         if idx % 10 == 0:
-            df = pd.DataFrame(all_rows, columns=out_cols)
-            df.to_excel(output_file, index=False, engine="openpyxl")
-    
-    # Final save
-    df = pd.DataFrame(all_rows, columns=out_cols)
+            df = pd.DataFrame(all_rows)
+            save_cols = [c for c in out_cols if c in df.columns]
+            if "_search_part" in df.columns:
+                save_cols.append("_search_part")
+            df[save_cols].to_excel(output_file, index=False, engine="openpyxl")
+
+    # Final save — keep _search_part for composite price calculation
+    df = pd.DataFrame(all_rows)
+    if df.empty:
+        df = pd.DataFrame(columns=out_cols)
+    else:
+        save_cols = [c for c in out_cols if c in df.columns]
+        if "_search_part" in df.columns:
+            save_cols.append("_search_part")
+        df = df[save_cols]
     df.to_excel(output_file, index=False, engine="openpyxl")
-    
+
     return df, scraped_products
 
 
@@ -385,15 +394,15 @@ def start_scraping():
     marketplace_fee = data.get('marketplace_fee', 0.10)
     consumption_tax = data.get('consumption_tax', 0.10)
     
-    # Get priority bids list and convert to dict
-    priority_bids_list = data.get('priority_bids', [])
-    priority_bids = {}
-    for item in priority_bids_list:
+    # Get priority bids as a list (supports multiple entries per keyword with different grades)
+    priority_bids_raw = data.get('priority_bids', [])
+    priority_bids = []
+    for item in priority_bids_raw:
         keyword = item.get('keyword', '').strip()
         amount = item.get('amount', 0)
         grades = item.get('grades', [])  # [] = all grades
         if keyword and amount > 0:
-            priority_bids[keyword] = {'amount': int(amount), 'grades': grades}
+            priority_bids.append({'keyword': keyword, 'amount': int(amount), 'grades': grades})
 
     # Get grade adjustments (UI overrides); fall back to config defaults
     import config as _config
